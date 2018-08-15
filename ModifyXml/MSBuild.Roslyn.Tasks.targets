@@ -1,0 +1,10 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <_CustomTaskAssemblyTFM Condition="'$(MSBuildRuntimeType)' == 'Core'">netstandard2.0</_CustomTaskAssemblyTFM>
+    <_CustomTaskAssemblyTFM Condition="'$(MSBuildRuntimeType)' != 'Core'">net46</_CustomTaskAssemblyTFM>
+    <_CustomTaskAssembly>$(MSBuildThisFileDirectory)..\tools\$(_CustomTaskAssemblyTFM)\ModifyXml.dll</_CustomTaskAssembly>
+  </PropertyGroup>
+
+  <UsingTask AssemblyFile="$(_CustomTaskAssembly)" TaskName="MSBuild.Roslyn.Tasks.ModifyXml" />
+</Project>
