@@ -131,7 +131,21 @@ namespace MSBuild.Roslyn.Tasks {
         }
 
         private void CopyExtraFile(string newDirectory, string originalDirectory, string extraFile) {
-            throw new NotImplementedException();
+            var relativePath = extraFile.Substring(originalDirectory.Length);
+            var fullPath = Path.GetFullPath(newDirectory + relativePath);
+
+            try {
+                Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
+                File.Copy(extraFile, fullPath);
+
+                // Ensure the copy isn't read only
+                var copyFileInfo = new FileInfo(fullPath) {
+                    IsReadOnly = false
+                };
+            }
+            catch (Exception) {
+                // continue execution
+            }
         }
 
         private ITaskItem Modify(string xmlPath, string metadata, out string newDirectory) {

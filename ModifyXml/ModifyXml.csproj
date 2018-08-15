@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net46</TargetFrameworks>
     <LangVersion>7.3</LangVersion>
-    <Version>1.0.1-beta1</Version>
+    <Version>1.0.2-beta1</Version>
     <Authors>Microsoft</Authors>
     <Description>Modifys a set of xml files and creates new xml files with the modification</Description>
     <IncludeBuildOutput>false</IncludeBuildOutput>
