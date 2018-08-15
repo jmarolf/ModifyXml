@@ -1,12 +1,16 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Xml;
 using System.Xml.Linq;
 using System.Xml.XPath;
 using Microsoft.Build.Framework;
 using Microsoft.Build.Utilities;
+using Vanara.PInvoke;
+using static Vanara.PInvoke.ShlwApi;
 
 namespace MSBuild.Roslyn.Tasks {
     /// <summary>
@@ -106,15 +110,19 @@ namespace MSBuild.Roslyn.Tasks {
                 }
 
                 var list = new List<ITaskItem>();
+                var files = ImmutableHashSet.Create<string>(XmlFiles.Select(x => Path.GetFileName(x.ItemSpec)).ToArray());
                 foreach (var xmlFile in XmlFiles) {
-                    var item = Modify(xmlFile.ItemSpec, xmlFile.GetMetadata("OutputSubPath"), out var newDirectory);
+                    var xmlFileInfo = new FileInfo(xmlFile.ItemSpec);
+                    var item = ModifyAndGetNewItem(xmlFileInfo.FullName, xmlFile.GetMetadata("OutputSubPath"), out var newDirectory);
                     list.Add(item);
 
-                    var originalDirectory = Path.GetDirectoryName(Path.GetFullPath(xmlFile.ItemSpec));
-                    var originalFileExtesion = Path.GetExtension(xmlFile.ItemSpec);
-                    foreach (var extraFile in new DirectoryInfo(originalDirectory).GetFiles("*.*", SearchOption.AllDirectories)) {
-                        if (extraFile.Extension != originalFileExtesion) {
-                            CopyExtraFile(newDirectory, originalDirectory, extraFile.FullName);
+                    
+                    foreach (var extraFile in xmlFileInfo.Directory.GetFiles("*.*", SearchOption.AllDirectories)) {
+                        if (extraFile.Extension == xmlFileInfo.Extension && files.Contains(extraFile.Name)) {
+                            ModifyExtraXmlFile(newDirectory, extraFile.FullName);
+                        }
+                        else {
+                            CopyExtraFile(newDirectory, xmlFileInfo.Directory.FullName, extraFile.FullName);
                         }
                     }
                 }
@@ -130,25 +138,61 @@ namespace MSBuild.Roslyn.Tasks {
             return true;
         }
 
-        private void CopyExtraFile(string newDirectory, string originalDirectory, string extraFile) {
-            var relativePath = extraFile.Substring(originalDirectory.Length);
-            var fullPath = Path.GetFullPath(newDirectory + relativePath);
-
-            try {
-                Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
-                File.Copy(extraFile, fullPath);
-
-                // Ensure the copy isn't read only
-                var copyFileInfo = new FileInfo(fullPath) {
-                    IsReadOnly = false
-                };
-            }
-            catch (Exception) {
-                // continue execution
-            }
+        private ITaskItem ModifyAndGetNewItem(string xmlPath, string metadata, out string newDirectory) {
+            var xdoc = ModifyAndGetNewXDocument(xmlPath);
+            return SaveXmlAndGetNewItem(xdoc, metadata, xmlPath, out newDirectory);
         }
 
-        private ITaskItem Modify(string xmlPath, string metadata, out string newDirectory) {
+        private void ModifyExtraXmlFile(string newDirectory, string extraFilePath) {
+            var referencedXml = ModifyAndGetNewXDocument(extraFilePath);
+            var relativePath = GetRelativePath(Path.GetFullPath(newDirectory), extraFilePath).Replace(@"..\", String.Empty);
+            var fullPath = Path.GetFullPath(Path.Combine(newDirectory, relativePath));
+            referencedXml.Save(fullPath);
+        }
+
+        private string GetRelativePath(string fromPath, string toPath) {
+            var fromAttr = GetPathAttribute(fromPath);
+            var toAttr = GetPathAttribute(toPath);
+            var path = new StringBuilder(260);
+
+            if (!(PathRelativePathTo(path, fromPath, fromAttr, toPath, toAttr))) {
+                throw new ArgumentException($"Paths {fromPath} and {toPath} do not have a common prefix");
+            }
+
+            return path.ToString();
+        }
+
+        private static FileFlagsAndAttributes GetPathAttribute(string path) {
+            var directoryInfo = new DirectoryInfo(path);
+            if (directoryInfo.Exists) {
+                return FileFlagsAndAttributes.FILE_ATTRIBUTE_DIRECTORY;
+            }
+
+            var fileInfo = new FileInfo(path);
+            if (fileInfo.Exists) {
+                return FileFlagsAndAttributes.FILE_ATTRIBUTE_NORMAL;
+            }
+
+            // If the path doesn't exist assume it to be a folder.
+            return FileFlagsAndAttributes.FILE_ATTRIBUTE_DIRECTORY;
+        }
+
+        private ITaskItem SaveXmlAndGetNewItem(XDocument xml, string metaDataValue, string oldXmlFilePath, out string newDirectory) {
+            newDirectory = Path.Combine(IntermediatePath, Path.GetDirectoryName(oldXmlFilePath));
+            if (!Directory.Exists(newDirectory)) {
+                Directory.CreateDirectory(newDirectory);
+            }
+
+            var newXmlFilePath = Path.Combine(newDirectory, Path.GetFileName(oldXmlFilePath));
+
+            var newXmlItem = new TaskItem(newXmlFilePath);
+            newXmlItem.SetMetadata("OutputSubPath", metaDataValue);
+
+            xml.Save(newXmlFilePath);
+            return newXmlItem;
+        }
+
+        private XDocument ModifyAndGetNewXDocument(string xmlPath) {
             Log.LogMessage($"Updating Xml Document {xmlPath}");
 
             var xdoc = XDocument.Load(xmlPath);
@@ -188,22 +232,25 @@ namespace MSBuild.Roslyn.Tasks {
                 }
             }
 
-            return SaveXml(xdoc, metadata, xmlPath, out newDirectory);
+            return xdoc;
         }
 
-        private ITaskItem SaveXml(XDocument xml, string metaDataValue, string oldXmlFilePath, out string newDirectory) {
-            newDirectory = Path.Combine(IntermediatePath, Path.GetDirectoryName(oldXmlFilePath));
-            if (!Directory.Exists(newDirectory)) {
-                Directory.CreateDirectory(newDirectory);
+        private static void CopyExtraFile(string newDirectory, string originalDirectory, string extraFile) {
+            var relativePath = extraFile.Substring(originalDirectory.Length);
+            var fullPath = Path.GetFullPath(newDirectory + relativePath);
+
+            try {
+                Directory.CreateDirectory(Path.GetDirectoryName(fullPath));
+                File.Copy(extraFile, fullPath);
+
+                // Ensure the copy isn't read only
+                var copyFileInfo = new FileInfo(fullPath) {
+                    IsReadOnly = false
+                };
             }
-
-            var newXmlFilePath = Path.Combine(newDirectory, Path.GetFileName(oldXmlFilePath));
-
-            var newXmlItem = new TaskItem(newXmlFilePath);
-            newXmlItem.SetMetadata("OutputSubPath", metaDataValue);
-
-            xml.Save(newXmlFilePath);
-            return newXmlItem;
+            catch (Exception) {
+                // continue execution
+            }
         }
     }
 }

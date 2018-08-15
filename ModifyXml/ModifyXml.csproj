@@ -3,7 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net46</TargetFrameworks>
     <LangVersion>7.3</LangVersion>
-    <Version>1.0.2-beta1</Version>
+    <Version>1.0.3-beta1</Version>
     <Authors>Microsoft</Authors>
     <Description>Modifys a set of xml files and creates new xml files with the modification</Description>
     <IncludeBuildOutput>false</IncludeBuildOutput>
@@ -14,11 +14,17 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Build.Framework" Version="15.8.166" PrivateAssets="all" />
     <PackageReference Include="Microsoft.Build.Utilities.Core" Version="15.8.166" PrivateAssets="all" />
+    <PackageReference Include="Vanara.PInvoke.ShlwApi" Version="1.0.18" PrivateAssets="all" />
   </ItemGroup>
   
   <ItemGroup>
     <None Include="$(OutputPath)\net46\$(AssemblyName).dll" Pack="true" PackagePath="tools/net46" Visible="false" />
+    <None Include="$(OutputPath)\net46\System.Collections.Immutable.dll" Pack="true" PackagePath="tools/net46" Visible="false" />
+    <None Include="$(OutputPath)\net46\Vanara.PInvoke.Shared.dll" Pack="true" PackagePath="tools/net46" Visible="false" />
+    <None Include="$(OutputPath)\net46\Vanara.PInvoke.ShlwApi.dll" Pack="true" PackagePath="tools/net46" Visible="false" />
+
     <None Include="$(OutputPath)\netstandard2.0\$(AssemblyName).dll" Pack="true" PackagePath="tools/netstandard2.0" Visible="false" />
+
     <None Include="MSBuild.Roslyn.Tasks.targets" Pack="true" PackagePath="build" />
   </ItemGroup>
   
