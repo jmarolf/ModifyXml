@@ -14,13 +14,20 @@ namespace MSBuild.Roslyn.Tasks {
     /// </summary>
     /// <example>Modify a XML element.
     /// <code><![CDATA[
-    /// <ModifyXml Prefix="n"
-    ///     Namespace="http://schemas.microsoft.com/developer/vstemplate/2005" 
-    ///     XPath="/n:VSTemplate/n:WizardExtension/n:Assembly"
-    ///     XmlFiles="@(VSTemplate)""
-    ///     Value="Roslyn.SDK.Template.Wizard, Version=$(AssemblyVersion), Culture=neutral, PublicKeyToken=31bf3856ad364e35">
+    ///  <ItemGroup>
+    ///   <_OriginalVSTemplate Include="@(VSTemplate)" />
+    ///  </ItemGroup>
+    ///  <ModifyXml XmlFiles="@(VSTemplate)"
+    ///             IntermediatePath="$(IntermediateOutputPath)\ModifiedTemplates"
+    ///             Prefix="n"
+    ///             Namespace="http://schemas.microsoft.com/developer/vstemplate/2005"
+    ///             XPath="/n:VSTemplate/n:WizardExtension/n:Assembly"
+    ///             Value="Roslyn.SDK.Template.Wizard, Version=$(AssemblyVersion), Culture=neutral, PublicKeyToken=31bf3856ad364e35">
     ///   <Output TaskParameter="NewXmlFiles" ItemName="VSTemplate" />
     /// </ModifyXml>
+    ///<ItemGroup>
+    ///  <VSTemplate Remove="@(_OriginalVSTemplate)" />
+    ///</ItemGroup>
     /// ]]></code>
     /// </example>
     /// <remarks>
@@ -100,8 +107,16 @@ namespace MSBuild.Roslyn.Tasks {
 
                 var list = new List<ITaskItem>();
                 foreach (var xmlFile in XmlFiles) {
-                    var item = Modify(xmlFile.ItemSpec, xmlFile.GetMetadata("OutputSubPath"));
+                    var item = Modify(xmlFile.ItemSpec, xmlFile.GetMetadata("OutputSubPath"), out var newDirectory);
                     list.Add(item);
+
+                    var originalDirectory = Path.GetDirectoryName(Path.GetFullPath(xmlFile.ItemSpec));
+                    var originalFileExtesion = Path.GetExtension(xmlFile.ItemSpec);
+                    foreach (var extraFile in new DirectoryInfo(originalDirectory).GetFiles("*.*", SearchOption.AllDirectories)) {
+                        if (extraFile.Extension != originalFileExtesion) {
+                            CopyExtraFile(newDirectory, originalDirectory, extraFile.FullName);
+                        }
+                    }
                 }
 
                 NewXmlFiles = list.ToArray();
@@ -115,7 +130,11 @@ namespace MSBuild.Roslyn.Tasks {
             return true;
         }
 
-        private ITaskItem Modify(string xmlPath, string metadata) {
+        private void CopyExtraFile(string newDirectory, string originalDirectory, string extraFile) {
+            throw new NotImplementedException();
+        }
+
+        private ITaskItem Modify(string xmlPath, string metadata, out string newDirectory) {
             Log.LogMessage($"Updating Xml Document {xmlPath}");
 
             var xdoc = XDocument.Load(xmlPath);
@@ -155,11 +174,11 @@ namespace MSBuild.Roslyn.Tasks {
                 }
             }
 
-            return SaveXml(xdoc, metadata, xmlPath);
+            return SaveXml(xdoc, metadata, xmlPath, out newDirectory);
         }
 
-        private ITaskItem SaveXml(XDocument xml, string metaDataValue, string oldXmlFilePath) {
-            var newDirectory = Path.Combine(IntermediatePath, Path.GetDirectoryName(oldXmlFilePath));
+        private ITaskItem SaveXml(XDocument xml, string metaDataValue, string oldXmlFilePath, out string newDirectory) {
+            newDirectory = Path.Combine(IntermediatePath, Path.GetDirectoryName(oldXmlFilePath));
             if (!Directory.Exists(newDirectory)) {
                 Directory.CreateDirectory(newDirectory);
             }
